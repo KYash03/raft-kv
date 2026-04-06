@@ -1,0 +1,6 @@
+raftkv
+*.test
+*.out
+.idea/
+.vscode/
+.DS_Store
