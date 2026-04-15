@@ -77,12 +77,54 @@ func (n *Node) HandleAppendEntries(req *pb.AppendEntriesRequest) *pb.AppendEntri
 		n.becomeFollower(req.Term)
 		resp.Term = n.currentTerm
 	}
-	// candidate hearing from a same-term leader needs to step down
+	// candidate hearing from a same term leader steps down
 	if n.state == Candidate {
 		n.state = Follower
 	}
 	n.leaderID = req.LeaderId
 	n.lastContact = time.Now()
+
+	// prev log must match
+	if req.PrevLogIndex > n.log.lastIndex() {
+		resp.ConflictIndex = n.log.lastIndex() + 1
+		return resp
+	}
+	if n.log.termAt(req.PrevLogIndex) != req.PrevLogTerm {
+		// rewind past every entry sharing this conflicting term so leader
+		// can skip back faster (small optimization on top of basic raft)
+		bad := n.log.termAt(req.PrevLogIndex)
+		i := req.PrevLogIndex
+		for i > 0 && n.log.termAt(i-1) == bad {
+			i--
+		}
+		resp.ConflictIndex = i
+		return resp
+	}
+
+	// merge entries
+	for j, e := range req.Entries {
+		idx := req.PrevLogIndex + uint64(j) + 1
+		if idx <= n.log.lastIndex() {
+			if n.log.termAt(idx) == e.Term {
+				continue
+			}
+			n.log.truncateFrom(idx)
+		}
+		n.log.entries = append(n.log.entries, LogEntry{
+			Term:  e.Term,
+			Index: idx,
+			Cmd:   e.Cmd,
+		})
+	}
+
+	if req.LeaderCommit > n.commitIndex {
+		newCommit := req.LeaderCommit
+		if last := n.log.lastIndex(); newCommit > last {
+			newCommit = last
+		}
+		n.commitIndex = newCommit
+	}
+
 	resp.Success = true
 	return resp
 }
