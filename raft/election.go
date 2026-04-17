@@ -10,6 +10,7 @@ import (
 )
 
 func (n *Node) Run() {
+	go n.applier()
 	for {
 		select {
 		case <-n.stopCh:
