@@ -1,4 +1,4 @@
-raftkv
+/raftkv
 *.test
 *.out
 .idea/
