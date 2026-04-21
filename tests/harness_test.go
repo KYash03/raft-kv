@@ -240,6 +240,10 @@ func (c *cluster) put(key, val string) error {
 	}
 }
 
+func encodePut(k, v string) []byte {
+	return kv.Encode(kv.Command{Op: kv.OpPut, Key: k, Value: v})
+}
+
 func (c *cluster) get(key string) (string, bool, error) {
 	ldr, ok := c.leader()
 	if !ok {

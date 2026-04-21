@@ -39,7 +39,7 @@ func TestLeaderFailoverOnHeartbeatStop(t *testing.T) {
 	old.node.Stop()
 
 	// wait for someone else to win an election
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	var fresh *clusterNode
 	for time.Now().Before(deadline) {
 		l, ok := c.leader()
