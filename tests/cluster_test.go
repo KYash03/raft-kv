@@ -34,23 +34,10 @@ func TestLeaderFailoverOnHeartbeatStop(t *testing.T) {
 		t.Fatalf("put before failover, %v", err)
 	}
 
-	// take old leader offline
-	c.net.setDown(old.id, true)
-	old.node.Stop()
-
-	// wait for someone else to win an election
-	deadline := time.Now().Add(5 * time.Second)
-	var fresh *clusterNode
-	for time.Now().Before(deadline) {
-		l, ok := c.leader()
-		if ok && l.id != old.id {
-			fresh = l
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if fresh == nil {
-		t.Fatal("no new leader elected after stopping old one")
+	c.kill(old)
+	fresh := c.waitLeader(3 * time.Second)
+	if fresh.id == old.id {
+		t.Fatal("waitLeader returned the dead old leader")
 	}
 
 	v, ok, err := c.get("k")

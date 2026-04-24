@@ -16,8 +16,7 @@ func TestMinorityFailureMakesProgress(t *testing.T) {
 		if s != 0 /* Follower */ {
 			continue
 		}
-		c.net.setDown(cn.id, true)
-		cn.node.Stop()
+		c.kill(cn)
 		killed++
 		if killed == 2 {
 			break
@@ -42,8 +41,7 @@ func TestMajorityFailureBlocks(t *testing.T) {
 		if cn.id == ldr.id {
 			continue
 		}
-		c.net.setDown(cn.id, true)
-		cn.node.Stop()
+		c.kill(cn)
 	}
 
 	// Submit will succeed (it's queued in the log) but commit won't.

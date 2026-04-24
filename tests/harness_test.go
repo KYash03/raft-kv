@@ -107,10 +107,10 @@ func (t *memTransport) AppendEntries(ctx context.Context, peer uint64, req *pb.A
 }
 
 type clusterNode struct {
-	id    uint64
-	node  *raft.Node
-	store *kv.Store
-	stop  chan struct{}
+	id      uint64
+	node    *raft.Node
+	store   *kv.Store
+	stopped bool
 }
 
 type cluster struct {
@@ -144,13 +144,7 @@ func newCluster(t *testing.T, n int) *cluster {
 		cfg.Heartbeat = 30 * time.Millisecond
 		node := raft.NewNode(cfg, &memTransport{self: id, net: net}, logger)
 		net.register(id, node)
-		cn := &clusterNode{
-			id:    id,
-			node:  node,
-			store: kv.New(),
-			stop:  make(chan struct{}),
-		}
-		c.nodes = append(c.nodes, cn)
+		c.nodes = append(c.nodes, &clusterNode{id: id, node: node, store: kv.New()})
 	}
 
 	for _, cn := range c.nodes {
@@ -185,12 +179,27 @@ func newCluster(t *testing.T, n int) *cluster {
 
 func (c *cluster) shutdown() {
 	for _, cn := range c.nodes {
-		cn.node.Stop()
+		if !cn.stopped {
+			cn.node.Stop()
+		}
 	}
+}
+
+// kill takes a node out of the test "world". drops its network and
+// stops the node loops. note that the underlying raft.Node's state
+// field doesn't get reset, so without the stopped flag below we'd
+// still see it as "leader" when iterating.
+func (c *cluster) kill(cn *clusterNode) {
+	c.net.setDown(cn.id, true)
+	cn.node.Stop()
+	cn.stopped = true
 }
 
 func (c *cluster) leader() (*clusterNode, bool) {
 	for _, cn := range c.nodes {
+		if cn.stopped {
+			continue
+		}
 		s, _ := cn.node.State()
 		if s == raft.Leader {
 			return cn, true
@@ -199,8 +208,7 @@ func (c *cluster) leader() (*clusterNode, bool) {
 	return nil, false
 }
 
-// waitLeader blocks until exactly one node thinks it's a leader (or until
-// the deadline). Returns it.
+// waitLeader blocks until exactly one live node is the leader.
 func (c *cluster) waitLeader(d time.Duration) *clusterNode {
 	c.t.Helper()
 	deadline := time.Now().Add(d)
@@ -208,6 +216,9 @@ func (c *cluster) waitLeader(d time.Duration) *clusterNode {
 		var ldr *clusterNode
 		count := 0
 		for _, cn := range c.nodes {
+			if cn.stopped {
+				continue
+			}
 			s, _ := cn.node.State()
 			if s == raft.Leader {
 				ldr = cn
