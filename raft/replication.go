@@ -181,12 +181,14 @@ func (n *Node) HandleAppendEntries(req *pb.AppendEntriesRequest) *pb.AppendEntri
 		})
 	}
 
+	// figure 2, AE step 5. min(leaderCommit, index of last new entry).
 	if req.LeaderCommit > n.commitIndex {
-		newCommit := req.LeaderCommit
-		if last := n.log.lastIndex(); newCommit > last {
-			newCommit = last
+		lastNew := req.PrevLogIndex + uint64(len(req.Entries))
+		if req.LeaderCommit < lastNew {
+			n.commitIndex = req.LeaderCommit
+		} else {
+			n.commitIndex = lastNew
 		}
-		n.commitIndex = newCommit
 	}
 
 	resp.Success = true
