@@ -60,7 +60,15 @@ func (n *Node) runFollower() {
 
 func (n *Node) runCandidate() {
 	n.mu.Lock()
-	n.currentTerm++
+	newTerm := n.currentTerm + 1
+	// persist the new term and self vote before declaring candidacy to anyone
+	if err := n.storage.SaveHardState(newTerm, n.cfg.ID); err != nil {
+		n.logger.Printf("[%d] persist on election start, %v. dropping back to follower", n.cfg.ID, err)
+		n.state = Follower
+		n.mu.Unlock()
+		return
+	}
+	n.currentTerm = newTerm
 	n.votedFor = n.cfg.ID
 	n.leaderID = 0
 	term := n.currentTerm
@@ -166,6 +174,11 @@ func (n *Node) HandleRequestVote(req *pb.RequestVoteRequest) *pb.RequestVoteResp
 	}
 	if (n.votedFor == 0 || n.votedFor == req.CandidateId) &&
 		n.log.upToDate(req.LastLogTerm, req.LastLogIndex) {
+		// persist before granting, otherwise we could double vote on crash
+		if err := n.storage.SaveHardState(n.currentTerm, req.CandidateId); err != nil {
+			n.logger.Printf("[%d] persist on grant vote, %v", n.cfg.ID, err)
+			return resp
+		}
 		n.votedFor = req.CandidateId
 		n.lastContact = time.Now()
 		resp.VoteGranted = true

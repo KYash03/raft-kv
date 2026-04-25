@@ -138,11 +138,16 @@ func (n *Node) LeaderID() uint64 {
 
 func (n *Node) quorum() int { return (len(n.cfg.Peers)+1)/2 + 1 }
 
-// caller holds mu
+// caller holds mu. when term goes up we MUST acknowledge (the incoming RPC
+// already saw the higher term), so persist is best effort here. a failure
+// gets logged and the in memory bump still happens.
 func (n *Node) becomeFollower(term uint64) {
 	if term > n.currentTerm {
 		n.currentTerm = term
 		n.votedFor = 0
+		if err := n.storage.SaveHardState(n.currentTerm, n.votedFor); err != nil {
+			n.logger.Printf("[%d] persist on step down, %v", n.cfg.ID, err)
+		}
 	}
 	if n.state != Follower {
 		n.logger.Printf("[%d] now follower (term %d)", n.cfg.ID, n.currentTerm)
