@@ -18,7 +18,12 @@ func (n *Node) Submit(cmd []byte) (uint64, <-chan ApplyResult, error) {
 		n.mu.Unlock()
 		return 0, nil, ErrNotLeader
 	}
-	e := n.log.append(cmd, n.currentTerm)
+	e := LogEntry{Term: n.currentTerm, Index: n.log.lastIndex() + 1, Cmd: cmd}
+	if err := n.storage.AppendLog([]LogEntry{e}); err != nil {
+		n.mu.Unlock()
+		return 0, nil, err
+	}
+	n.log.entries = append(n.log.entries, e)
 	ch := make(chan ApplyResult, 1)
 	n.pending[e.Index] = ch
 	term := n.currentTerm

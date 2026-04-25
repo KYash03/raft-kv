@@ -165,20 +165,35 @@ func (n *Node) HandleAppendEntries(req *pb.AppendEntriesRequest) *pb.AppendEntri
 		return resp
 	}
 
-	// merge entries
+	// figure 2 step 3 and 4. figure out what (if anything) to truncate and
+	// what to append, then persist both in one shot before returning success.
+	var toAppend []LogEntry
+	truncFrom := uint64(0)
 	for j, e := range req.Entries {
 		idx := req.PrevLogIndex + uint64(j) + 1
-		if idx <= n.log.lastIndex() {
-			if n.log.termAt(idx) == e.Term {
-				continue
-			}
-			n.log.truncateFrom(idx)
+		if truncFrom > 0 || idx > n.log.lastIndex() {
+			toAppend = append(toAppend, LogEntry{Term: e.Term, Index: idx, Cmd: e.Cmd})
+			continue
 		}
-		n.log.entries = append(n.log.entries, LogEntry{
-			Term:  e.Term,
-			Index: idx,
-			Cmd:   e.Cmd,
-		})
+		if n.log.termAt(idx) == e.Term {
+			continue
+		}
+		truncFrom = idx
+		toAppend = append(toAppend, LogEntry{Term: e.Term, Index: idx, Cmd: e.Cmd})
+	}
+	if truncFrom > 0 {
+		if err := n.storage.TruncateLog(truncFrom); err != nil {
+			n.logger.Printf("[%d] persist truncate, %v", n.cfg.ID, err)
+			return resp
+		}
+		n.log.truncateFrom(truncFrom)
+	}
+	if len(toAppend) > 0 {
+		if err := n.storage.AppendLog(toAppend); err != nil {
+			n.logger.Printf("[%d] persist append, %v", n.cfg.ID, err)
+			return resp
+		}
+		n.log.entries = append(n.log.entries, toAppend...)
 	}
 
 	// figure 2, AE step 5. min(leaderCommit, index of last new entry).
