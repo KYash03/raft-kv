@@ -95,19 +95,29 @@ type Node struct {
 	logger *log.Logger
 }
 
-func NewNode(cfg Config, t Transport, logger *log.Logger) *Node {
+func NewNode(cfg Config, t Transport, logger *log.Logger) (*Node, error) {
 	if logger == nil {
 		logger = log.Default()
 	}
 	if cfg.Storage == nil {
 		cfg.Storage = NewMemoryStorage()
 	}
+	term, votedFor, entries, err := cfg.Storage.Load()
+	if err != nil {
+		return nil, err
+	}
+	l := newLog()
+	for _, e := range entries {
+		l.entries = append(l.entries, e)
+	}
 	return &Node{
 		cfg:         cfg,
 		transport:   t,
 		storage:     cfg.Storage,
 		state:       Follower,
-		log:         newLog(),
+		currentTerm: term,
+		votedFor:    votedFor,
+		log:         l,
 		nextIndex:   make(map[uint64]uint64),
 		matchIndex:  make(map[uint64]uint64),
 		pending:     make(map[uint64]chan ApplyResult),
@@ -115,7 +125,7 @@ func NewNode(cfg Config, t Transport, logger *log.Logger) *Node {
 		applyCh:     make(chan Apply, 64),
 		stopCh:      make(chan struct{}),
 		logger:      logger,
-	}
+	}, nil
 }
 
 func (n *Node) ApplyCh() <-chan Apply { return n.applyCh }

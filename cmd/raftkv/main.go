@@ -17,6 +17,7 @@ func main() {
 	id := flag.Uint64("id", 0, "this node's id (must be > 0)")
 	addr := flag.String("addr", "", "listen address (passed to net.Listen)")
 	peerStr := flag.String("peers", "", "comma sep peer list of id@addr, include self")
+	dataDir := flag.String("data", "", "directory for persistent state (empty for in memory only)")
 	flag.Parse()
 
 	if *id == 0 || *addr == "" || *peerStr == "" {
@@ -29,7 +30,10 @@ func main() {
 		log.Fatalf("bad peers value, %v", err)
 	}
 
-	s := server.New(*id, *addr, peers)
+	s, err := server.New(*id, *addr, *dataDir, peers)
+	if err != nil {
+		log.Fatalf("new server, %v", err)
+	}
 	if err := s.Start(); err != nil {
 		log.Fatalf("start, %v", err)
 	}

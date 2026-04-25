@@ -142,7 +142,10 @@ func newCluster(t *testing.T, n int) *cluster {
 		cfg.ElectionMin = 100 * time.Millisecond
 		cfg.ElectionMax = 200 * time.Millisecond
 		cfg.Heartbeat = 30 * time.Millisecond
-		node := raft.NewNode(cfg, &memTransport{self: id, net: net}, logger)
+		node, err := raft.NewNode(cfg, &memTransport{self: id, net: net}, logger)
+		if err != nil {
+			t.Fatalf("new node %d, %v", id, err)
+		}
 		net.register(id, node)
 		c.nodes = append(c.nodes, &clusterNode{id: id, node: node, store: kv.New()})
 	}

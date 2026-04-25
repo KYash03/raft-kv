@@ -37,7 +37,7 @@ type Server struct {
 	wg sync.WaitGroup
 }
 
-func New(id uint64, addr string, peers []Peer) *Server {
+func New(id uint64, addr, dataDir string, peers []Peer) (*Server, error) {
 	pmap := map[uint64]string{}
 	var ids []uint64
 	for _, p := range peers {
@@ -49,15 +49,25 @@ func New(id uint64, addr string, peers []Peer) *Server {
 	}
 	tr := newGRPCTransport(pmap)
 	cfg := raft.DefaultConfig(id, ids)
-	s := &Server{
+	if dataDir != "" {
+		store, err := raft.NewFileStorage(dataDir)
+		if err != nil {
+			return nil, err
+		}
+		cfg.Storage = store
+	}
+	node, err := raft.NewNode(cfg, tr, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &Server{
 		id:    id,
 		addr:  addr,
 		peers: pmap,
 		store: kv.New(),
 		tr:    tr,
-	}
-	s.node = raft.NewNode(cfg, tr, nil)
-	return s
+		node:  node,
+	}, nil
 }
 
 func (s *Server) Start() error {
