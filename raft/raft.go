@@ -52,6 +52,7 @@ type Config struct {
 	ElectionMin time.Duration
 	ElectionMax time.Duration
 	Heartbeat   time.Duration
+	Storage     Storage // defaults to in memory if nil
 }
 
 func DefaultConfig(id uint64, peers []uint64) Config {
@@ -67,6 +68,7 @@ func DefaultConfig(id uint64, peers []uint64) Config {
 type Node struct {
 	cfg       Config
 	transport Transport
+	storage   Storage
 
 	mu sync.Mutex
 
@@ -97,9 +99,13 @@ func NewNode(cfg Config, t Transport, logger *log.Logger) *Node {
 	if logger == nil {
 		logger = log.Default()
 	}
+	if cfg.Storage == nil {
+		cfg.Storage = NewMemoryStorage()
+	}
 	return &Node{
 		cfg:         cfg,
 		transport:   t,
+		storage:     cfg.Storage,
 		state:       Follower,
 		log:         newLog(),
 		nextIndex:   make(map[uint64]uint64),
