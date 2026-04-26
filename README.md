@@ -12,10 +12,10 @@ https://raft.github.io/raft.pdf).
 brew install go protobuf
 go build ./...
 
-# 3 node cluster on localhost
-./raftkv --id=1 --addr=:9001 --peers=1@:9001,2@:9002,3@:9003 &
-./raftkv --id=2 --addr=:9002 --peers=1@:9001,2@:9002,3@:9003 &
-./raftkv --id=3 --addr=:9003 --peers=1@:9001,2@:9002,3@:9003 &
+# 3 node cluster on localhost. omit --data for in memory only.
+./raftkv --id=1 --addr=:9001 --data=/tmp/raftkv-1 --peers=1@:9001,2@:9002,3@:9003 &
+./raftkv --id=2 --addr=:9002 --data=/tmp/raftkv-2 --peers=1@:9001,2@:9002,3@:9003 &
+./raftkv --id=3 --addr=:9003 --data=/tmp/raftkv-3 --peers=1@:9001,2@:9002,3@:9003 &
 ```
 
 hit any node with grpcurl. if it isn't the leader it'll send back a
@@ -29,7 +29,6 @@ go test ./... -race
 
 ## TODO
 
-* persistence
 * read index for Get
 * snapshotting
 * cluster membership changes
